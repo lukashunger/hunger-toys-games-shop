@@ -1,8 +1,15 @@
 name: Update Ricardo Inventory
 
+# HINWEIS: ricardo.ch blockiert Anfragen von GitHub-Actions-Servern (403
+# Forbidden) - auch mit Browser-Fingerprint-Spoofing (curl_cffi). Der
+# taegliche Cron-Trigger ist deshalb deaktiviert, um taegliche Fehler-Mails
+# zu vermeiden. items.json wird stattdessen manuell (oder ueber Claude/
+# Cowork) aktualisiert. Falls ricardo.ch die Sperre irgendwann aufhebt,
+# einfach den auskommentierten "schedule"-Block unten wieder aktivieren.
+
 on:
-  schedule:
-    - cron: '0 5 * * *'
+  # schedule:
+  #   - cron: '0 5 * * *'
   workflow_dispatch: {}
 
 permissions:
