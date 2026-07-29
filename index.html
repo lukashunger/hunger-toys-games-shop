@@ -42,9 +42,9 @@
   }
   .card{
     background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden;
-    display:flex; flex-direction:column; text-decoration:none; color:var(--text); transition:.15s;
+    display:flex; flex-direction:column; color:var(--text); transition:.15s;
   }
-  .card:hover{background:var(--card-hover); transform:translateY(-2px); border-color:var(--accent2);}
+  .card:hover{background:var(--card-hover); border-color:var(--accent2);}
   .thumb{
     aspect-ratio:4/3; background:#20253f; display:flex; align-items:center; justify-content:center;
     overflow:hidden;
@@ -80,7 +80,7 @@
 </main>
 
 <footer>
-  Daten automatisch von <a href="https://www.ricardo.ch/de/shop/Hunger-Toys-Games/offers/" target="_blank" rel="noopener">Ricardo.ch</a> aktualisiert.
+  Bestand wird regelmässig gegen die Verkaufsplattform geprüft und automatisch aktualisiert.
 </footer>
 
 <script>
@@ -134,11 +134,8 @@ function render() {
   document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
 
   filtered.forEach(i => {
-    const a = document.createElement('a');
-    a.href = i.url;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.className = 'card';
+    const card = document.createElement('div');
+    card.className = 'card';
 
     const thumb = document.createElement('div');
     thumb.className = 'thumb';
@@ -161,9 +158,9 @@ function render() {
       ${i.condition ? `<div class="condition">${escapeHtml(i.condition)}</div>` : ''}
     `;
 
-    a.appendChild(thumb);
-    a.appendChild(body);
-    grid.appendChild(a);
+    card.appendChild(thumb);
+    card.appendChild(body);
+    grid.appendChild(card);
   });
 }
 
