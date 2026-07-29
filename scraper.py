@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""
+Scraper fuer den Hunger-Toys-Games Ricardo-Shop.
+
+Liest alle offenen Angebote von der oeffentlichen Ricardo-Verkaeuferseite
+(https://www.ricardo.ch/de/shop/Hunger-Toys-Games/offers/) und schreibt sie
+als items.json (fuer index.html) ins Repo-Root.
+
+Laeuft normalerweise automatisch ueber GitHub Actions
+(.github/workflows/update.yml), kann aber auch lokal ausgefuehrt werden:
+
+    pip install requests beautifulsoup4
+    python scraper.py
+"""
+
+import json
+import re
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+import requests
+from bs4 import BeautifulSoup
+
+SHOP_URL = "https://www.ricardo.ch/de/shop/Hunger-Toys-Games/offers/"
+OUTPUT_FILE = Path(__file__).parent / "items.json"
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; HungerToysGamesInventoryBot/1.0; "
+        "+https://github.com/lukashunger)"
+    ),
+    "Accept-Language": "de-CH,de;q=0.9",
+}
+
+REQUEST_DELAY = 0.6  # Sekunden zwischen Requests, um freundlich zu bleiben
+MAX_PAGES = 15  # Sicherheitslimit gegen Endlosschleifen
+
+
+def fetch(url: str) -> str:
+    resp = requests.get(url, headers=HEADERS, timeout=25)
+    resp.raise_for_status()
+    return resp.text
+
+
+def collect_product_urls() -> list[str]:
+    """Sammelt alle eindeutigen Produkt-URLs von der Shop-Seite (inkl. Paginierung)."""
+    urls: list[str] = []
+    seen = set()
+
+    for page in range(1, MAX_PAGES + 1):
+        page_url = SHOP_URL if page == 1 else f"{SHOP_URL}?page={page}"
+        try:
+            html = fetch(page_url)
+        except requests.RequestException as e:
+            print(f"[warn] konnte Seite {page} nicht laden: {e}", file=sys.stderr)
+            break
+
+        found = re.findall(r'href="(/de/a/[^"]+?-\d+/)"', html)
+        new_on_page = [u for u in found if u not in seen]
+
+        if not new_on_page:
+            # keine neuen Artikel mehr -> letzte Seite erreicht
+            break
+
+        for u in new_on_page:
+            seen.add(u)
+            urls.append("https://www.ricardo.ch" + u)
+
+        time.sleep(REQUEST_DELAY)
+
+    return urls
+
+
+def parse_product(url: str) -> dict | None:
+    try:
+        html = fetch(url)
+    except requests.RequestException as e:
+        print(f"[warn] konnte {url} nicht laden: {e}", file=sys.stderr)
+        return None
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    def meta(name_or_prop: str, attr: str = "property") -> str | None:
+        tag = soup.find("meta", attrs={attr: name_or_prop})
+        return tag["content"].strip() if tag and tag.get("content") else None
+
+    title = meta("og:title") or (soup.title.string if soup.title else None) or ""
+    title = re.sub(r"\s*\|\s*Kaufen auf Ricardo.*$", "", title).strip()
+
+    image = meta("og:image")
+
+    description = meta("og:description") or ""
+    price = None
+    m = re.search(r"Preis:\s*CHF\s*([\d.,'’]+)", description)
+    if m:
+        price_str = m.group(1).replace("'", "").replace("’", "").replace(",", ".")
+        try:
+            price = float(price_str)
+        except ValueError:
+            price = None
+
+    condition = None
+    m = re.search(r"Zustand:\s*([^|]+)", description)
+    if m:
+        condition = m.group(1).strip()
+
+    id_match = re.search(r"-(\d+)/?$", url)
+    item_id = id_match.group(1) if id_match else url
+
+    # Marke best-effort aus Titel ableiten (Fallback wenn og-Daten nichts hergeben)
+    brand = None
+    for candidate in ["Lego", "LEGO", "Pokémon", "Pokemon", "Nintendo", "Sony"]:
+        if candidate.lower() in title.lower():
+            brand = "Pokémon" if "pok" in candidate.lower() else candidate.capitalize()
+            break
+    if brand is None:
+        brand = "Sonstige"
+
+    return {
+        "id": item_id,
+        "title": title,
+        "brand": brand,
+        "price": price,
+        "condition": condition,
+        "image": image,
+        "url": url,
+    }
+
+
+def load_existing() -> dict:
+    if OUTPUT_FILE.exists():
+        try:
+            return json.loads(OUTPUT_FILE.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            pass
+    return {"items": []}
+
+
+def main() -> None:
+    existing = load_existing()
+    existing_by_id = {i["id"]: i for i in existing.get("items", [])}
+
+    product_urls = collect_product_urls()
+    print(f"[info] {len(product_urls)} Angebote gefunden.")
+
+    items = []
+    for url in product_urls:
+        item = parse_product(url)
+        time.sleep(REQUEST_DELAY)
+
+        id_match = re.search(r"-(\d+)/?$", url)
+        item_id = id_match.group(1) if id_match else url
+
+        if item is None:
+            # Fetch fehlgeschlagen -> alten Eintrag behalten, falls vorhanden
+            if item_id in existing_by_id:
+                print(f"[info] behalte gecachten Eintrag fuer {item_id}")
+                items.append(existing_by_id[item_id])
+            continue
+
+        items.append(item)
+
+    data = {
+        "shop": "Hunger-Toys-Games",
+        "shop_url": SHOP_URL,
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "items": items,
+    }
+
+    OUTPUT_FILE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"[info] {len(items)} Angebote nach {OUTPUT_FILE} geschrieben.")
+
+
+if __name__ == "__main__":
+    main()

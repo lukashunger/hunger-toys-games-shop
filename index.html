@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hunger Toys & Games – Aktuelle Angebote</title>
+<meta name="description" content="Alle aktuellen Ricardo-Angebote von Hunger Toys & Games auf einen Blick.">
+<style>
+  :root{
+    --bg:#0f1220; --card:#171b2e; --card-hover:#1e2340; --text:#f2f3f7;
+    --muted:#9aa0b4; --accent:#ff5d5d; --accent2:#5db1ff; --border:#2a2f4a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text);
+  }
+  header{
+    padding:32px 20px 20px; text-align:center; border-bottom:1px solid var(--border);
+  }
+  header h1{margin:0 0 6px; font-size:1.8rem;}
+  header p{margin:0; color:var(--muted); font-size:.95rem;}
+  .meta{margin-top:10px; font-size:.8rem; color:var(--muted);}
+  .controls{
+    max-width:1100px; margin:20px auto 0; padding:0 20px;
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;
+  }
+  #search{
+    flex:1; min-width:200px; padding:10px 14px; border-radius:8px; border:1px solid var(--border);
+    background:var(--card); color:var(--text); font-size:.95rem;
+  }
+  .filters{display:flex; gap:8px; flex-wrap:wrap;}
+  .filters button{
+    padding:8px 14px; border-radius:20px; border:1px solid var(--border); background:var(--card);
+    color:var(--text); cursor:pointer; font-size:.85rem; transition:.15s;
+  }
+  .filters button.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .filters button:hover{border-color:var(--accent2);}
+  main{max-width:1100px; margin:0 auto; padding:20px;}
+  .grid{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px;
+  }
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden;
+    display:flex; flex-direction:column; text-decoration:none; color:var(--text); transition:.15s;
+  }
+  .card:hover{background:var(--card-hover); transform:translateY(-2px); border-color:var(--accent2);}
+  .thumb{
+    aspect-ratio:4/3; background:#20253f; display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+  }
+  .thumb img{width:100%; height:100%; object-fit:cover;}
+  .thumb .placeholder{color:var(--muted); font-size:2rem;}
+  .card-body{padding:12px 14px 14px; display:flex; flex-direction:column; gap:6px; flex:1;}
+  .brand{font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--accent2); font-weight:600;}
+  .title{font-size:.92rem; line-height:1.3; flex:1;}
+  .price{font-size:1.1rem; font-weight:700; color:var(--accent);}
+  .condition{font-size:.75rem; color:var(--muted);}
+  footer{text-align:center; padding:30px 20px; color:var(--muted); font-size:.8rem;}
+  footer a{color:var(--accent2);}
+  #empty{display:none; text-align:center; color:var(--muted); padding:40px 0;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧸 Hunger Toys & Games</h1>
+  <p>Retro-Videospiele, Lego & mehr – live von meinem Ricardo-Shop</p>
+  <div class="meta" id="meta">Lade Angebote…</div>
+</header>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="Suche nach Titel…">
+  <div class="filters" id="filters"></div>
+</div>
+
+<main>
+  <div class="grid" id="grid"></div>
+  <div id="empty">Keine Angebote gefunden.</div>
+</main>
+
+<footer>
+  Daten automatisch von <a href="https://www.ricardo.ch/de/shop/Hunger-Toys-Games/offers/" target="_blank" rel="noopener">Ricardo.ch</a> aktualisiert.
+</footer>
+
+<script>
+let allItems = [];
+let activeBrand = "Alle";
+
+async function load() {
+  try {
+    const res = await fetch('items.json?_=' + Date.now());
+    const data = await res.json();
+    allItems = data.items || [];
+    document.getElementById('meta').textContent =
+      allItems.length + ' Angebote · zuletzt aktualisiert: ' + formatDate(data.generated_at);
+    buildFilters();
+    render();
+  } catch (e) {
+    document.getElementById('meta').textContent = 'Fehler beim Laden der Angebote.';
+  }
+}
+
+function formatDate(iso) {
+  if (!iso) return '–';
+  const d = new Date(iso);
+  return d.toLocaleString('de-CH', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function buildFilters() {
+  const brands = ['Alle', ...new Set(allItems.map(i => i.brand || 'Sonstige'))];
+  const el = document.getElementById('filters');
+  el.innerHTML = '';
+  brands.forEach(b => {
+    const btn = document.createElement('button');
+    btn.textContent = b;
+    if (b === activeBrand) btn.classList.add('active');
+    btn.onclick = () => { activeBrand = b; buildFilters(); render(); };
+    el.appendChild(btn);
+  });
+}
+
+function render() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  const filtered = allItems.filter(i => {
+    const matchesBrand = activeBrand === 'Alle' || (i.brand || 'Sonstige') === activeBrand;
+    const matchesSearch = !q || i.title.toLowerCase().includes(q);
+    return matchesBrand && matchesSearch;
+  });
+
+  document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
+
+  filtered.forEach(i => {
+    const a = document.createElement('a');
+    a.href = i.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.className = 'card';
+
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb';
+    if (i.image) {
+      const img = document.createElement('img');
+      img.src = i.image;
+      img.alt = i.title;
+      img.loading = 'lazy';
+      thumb.appendChild(img);
+    } else {
+      thumb.innerHTML = '<span class="placeholder">🎮</span>';
+    }
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    body.innerHTML = `
+      <div class="brand">${i.brand || 'Sonstige'}</div>
+      <div class="title">${escapeHtml(i.title)}</div>
+      <div class="price">CHF ${Number(i.price).toFixed(2)}</div>
+      ${i.condition ? `<div class="condition">${escapeHtml(i.condition)}</div>` : ''}
+    `;
+
+    a.appendChild(thumb);
+    a.appendChild(body);
+    grid.appendChild(a);
+  });
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+document.getElementById('search').addEventListener('input', render);
+load();
+</script>
+
+</body>
+</html>
